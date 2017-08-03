@@ -143,11 +143,18 @@ def geneprofiles(infiles,outfile):
     bamfile, controlfile = infiles
     base=re.search(r"(geneprofiles.dir/.+-Chip-.+-.+).bam2geneprofile", outfile, flags = 0)  
     base=base.group(1)
+    outputallprofiles = PARAMS["job_outputallprofiles"]
+    if outputallprofiles == 1:
+        outputprofiles = "--output-all-profiles"
+    elif outputallprofiles == 0:
+        outputprofiles = ""
     statement='''python ~/devel/cgat/scripts/bam2geneprofile.py
                  -b %(bamfile)s
                  -c %(controlfile)s
                  -g /shared/sudlab1/General/annotations/mm10_ensembl85/ensembl.dir/geneset_all.gtf.gz
-                 -m geneprofile -m tssprofile
+                 -m geneprofile 
+                 -m tssprofile
+                 %(outputprofiles)s                 
                  --normalize-transcript=total-sum
                  --normalize-profile=area
                  --merge-pairs
@@ -158,18 +165,23 @@ def geneprofiles(infiles,outfile):
 
 @follows(mkdir("peakcalling.dir"))
 @transform(prepareBAMForPeakCalling,
-	   regex(r"prepped_bams.dir/(.*)-Chip-(.+)-(.+).filtered.prep.bam"),
+	   regex(r"prepped_bams.dir/(.+)-Chip-(.+)-(.+).filtered.prep.bam"),
            add_inputs(r"prepped_bams.dir/\1-Control-\2-1.filtered.prep.bam"),
            r"peakcalling.dir/\1-chip-\2-\3.bam.macs2")
 def peakcall(infiles,outfile):
     bamfile, controlfile = infiles
+    peakcalling = PARAMS["job_peakcalling"]
+    if peakcalling == 1:
+        peaks = "--broad"
+    elif peakcalling == 0:
+        peaks = "" 
     drctry=re.search(r"(peakcalling.dir/.+-chip-.+-.+).bam.macs2", outfile, flags = 0)
     drc=drctry.group(1)
     statement='''macs2 callpeak -t %(bamfile)s 
                                 -c %(controlfile)s
                                 -g mm
                                 --verbose=2
-                                --broad
+                                %(peaks)s
                                 -f BAMPE 
                                 --outdir %(drc)s
                                 --tempdir %(tmpdir)s >
@@ -177,10 +189,19 @@ def peakcall(infiles,outfile):
     job_memory="6G"
     P.run()
 
+@follows("geneprofiles")
+@transform("geneprofiles.dir/*geneprofile.profiles.tsv.gz", regex(r"(.+).geneprofile.profiles.tsv.gz"),r"\1.normalisedprofile.tsv.gz")
+def normaliseprofiles(infile, outfile):
+    statement = '''python ~/devel/pipeline_peaksandprofiles/pipeline_peaksandprofiles/normalise_profiles.py
+                -m %(infile)s
+                -L /dev/null
+                > %(outfile)s'''
+   job_memory="20G"
+   P.run()
 
 # ---------------------------------------------------
 # Generic pipeline tasks
-@follows(peakcall)
+@follows(peakcall, geneprofiles, normaliseprofiles)
 def full():
     pass
 

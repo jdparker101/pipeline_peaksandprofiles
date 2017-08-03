@@ -35,8 +35,10 @@ cgat_scripts_dir=~/devel/cgat/scripts
 [job]
 #The list of genes to use. Must not be blank.
 genomic_context=/shared/sudlab1/General/annotations/mm10_ensembl85/enrichment.dir/genomic_context.bed.gz
-#The relative file path to write the merged table to.
-merged_table_file=mismatches_table.tsv.gz
+
+#Narrow or broad peak calling - use 1 broad for broad peaks, 0 for normal
+peakcalling=0
+
 ################################################################
 #
 # sphinxreport build options
