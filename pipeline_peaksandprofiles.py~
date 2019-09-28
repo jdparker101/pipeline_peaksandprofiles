@@ -106,6 +106,8 @@ PARAMS = P.getParameters(
      "pipeline.ini"])
 
 PARAMS["pipelinedir"] = os.path.dirname(__file__)
+
+
 # ---------------------------------------------------
 # Specific pipeline tasks
 #Files must be in the format: variable1(e.g.Tissue)-ChiporControl-variable2
@@ -122,18 +124,78 @@ def filterunmappedreads(infile,outfile):
     P.run()
 
 
-@follows(mkdir("prepped_bams.dir"))
+@follows(mkdir("deduplicated.dir"))
 @transform(filterunmappedreads,
            regex(r"filtered_bams.dir/(.+).bam"),
-           r"prepped_bams.dir/\1.prep.bam")
-def prepareBAMForPeakCalling(infile, outfile):
-    
+           r"deduplicated.dir/\1.deduplicated.bam")
+def removeduplicates(infile, outfile):
+    temp_file=P.snip(outfile, ".deduplicated.bam") + ".temp.bam"
     metrics_file=P.snip(outfile, ".bam") + ".metrics"
     statement='''MarkDuplicates I=%(infile)s  
-                                O=%(outfile)s 
-                                M=%(metrics_file)s > %(outfile)s.log'''
+                                O=%(temp_file)s 
+                                M=%(metrics_file)s > %(temp_file)s.log;
+                                checkpoint;
+                                samtools view 
+                                -F 1024
+                                -b
+                                %(temp_file)s
+                                > %(outfile)s;
+                                checkpoint;
+                                rm -r %(temp_file)s;
+                                checkpoint;
+                                samtools index %(outfile)s'''
     job_memory="6G"
     P.run()
+
+
+#@transform(prepareBAMForPeakCalling,suffix(".prep.bam"),"deduplicated.bam")
+#def removeduplicates(infile,outfile):
+ #   statement='''samtools view 
+  #               -F 1024
+   #              -b
+    #             %(infile)s
+     #            > %(outfile)s'''
+    #job_memory="15G"
+    #P.run()
+
+@follows("removeduplicates")
+@transform(PARAMS['job_annotations'],suffix(".gtf.gz"),"_merged.gtf")
+def mergeexons(infile, outfile):
+    gtfmethod=PARAMS['job_gtf2gtfmergemethod']
+    statement='''zcat %(infile)s | 
+                 python %(cgat_scripts_dir)s/gtf2gtf.py
+                 --method=%(gtfmethod)s |
+                 python %(cgat_scripts_dir)s/gtf2gtf.py
+                 --method=set-transcript-to-gene >
+                 %(outfile)s'''
+    
+
+    job_memory="15G"
+    P.run()
+                 
+
+@follows("mergeexons")
+@follows(mkdir("genecounts.dir"))
+@transform(removeduplicates,regex(r"(.+).deduplicated.bam"),add_inputs(mergeexons),r"genecounts.dir/\1.counts.txt")
+def getgenecounts(infiles,outfile):
+    bamfile, gtffile = infiles
+    statement='''featureCounts -t exon 
+                               -g gene_id
+                               -a %(gtffile)s 
+                               -o %(outfile)s 
+                               %(bamfile)s'''
+
+    job_memory="6G" 
+    P.run()
+
+@merge(getgenecounts, "combined_gene_counts.txt")
+def mergegenecounts(infiles, outfile):
+    infiles = " ".join(infiles)
+    statement = '''python %(cgat_scripts_dir)s/combine_tables.py
+                   --use-file-prefix -c 1,2,3,4,5,6 -k 7 --regex-filename="(.+).txt" -S %(outfile)s %(infiles)s'''
+    job_memory="10G" 
+    P.run()
+                
 
 @follows(mkdir("geneprofiles.dir"))
 @transform("*.bam",regex(r"(.+)-Chip-(.+)-(.+).bam"),
@@ -163,8 +225,9 @@ def geneprofiles(infiles,outfile):
     job_memory="6G"
     P.run()
 
+
 @follows(mkdir("peakcalling.dir"))
-@transform(prepareBAMForPeakCalling,
+@transform(filterunmappedreads,
 	   regex(r"prepped_bams.dir/(.+)-Chip-(.+)-(.+).filtered.prep.bam"),
            add_inputs(r"prepped_bams.dir/\1-Control-\2-1.filtered.prep.bam"),
            r"peakcalling.dir/\1-chip-\2-\3.bam.macs2")
@@ -189,6 +252,7 @@ def peakcall(infiles,outfile):
     job_memory="6G"
     P.run()
 
+
 @follows("geneprofiles")
 @transform("geneprofiles.dir/*geneprofile.profiles.tsv.gz", regex(r"(.+).geneprofile.profiles.tsv.gz"),r"\1.normalisedprofile.tsv.gz")
 def normaliseprofiles(infile, outfile):
@@ -196,12 +260,12 @@ def normaliseprofiles(infile, outfile):
                 -m %(infile)s
                 -L /dev/null
                 > %(outfile)s'''
-   job_memory="20G"
-   P.run()
+    job_memory="20G"
+    P.run()
 
 # ---------------------------------------------------
 # Generic pipeline tasks
-@follows(peakcall, geneprofiles, normaliseprofiles)
+@follows(peakcall, geneprofiles, normaliseprofiles, mergegenecounts)
 def full():
     pass
 

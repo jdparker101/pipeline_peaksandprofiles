@@ -39,6 +39,13 @@ genomic_context=/shared/sudlab1/General/annotations/mm10_ensembl85/enrichment.di
 #Narrow or broad peak calling - use 1 broad for broad peaks, 0 for normal
 peakcalling=0
 
+annotations=/shared/sudlab1/General/annotations/mm10_ensembl85/ensembl.dir/geneset_all.gtf.gz
+
+gtf2gtfmergemethod=merge-transcripts
+
+#Whether you want the pipeline to output all of the profiles for each
+#individual transcript. 1 for yes, 0 for no
+outputallprofiles=0
 ################################################################
 #
 # sphinxreport build options

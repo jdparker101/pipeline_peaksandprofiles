@@ -66,15 +66,15 @@ def main(argv=None):
         line = line.strip()
         fields = line.split("\t")
         #print "before", len(fields)
-        #for i, col in enumerate(fields):
-            #if i == "":
-                #fields[i] = "0"
-            #else: continue
-
         for i, col in enumerate(fields):
-            if re.match('\s',col):
+            if i == " ":
                 fields[i] = "0"
             else: continue
+
+        #for i, col in enumerate(fields):
+            #if re.match('\s',col):
+                #fields[i] = "0"
+            #else: continue
 
         try:
             total = sum([float(col) for col in fields[1:]])
