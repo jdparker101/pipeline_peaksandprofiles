@@ -257,21 +257,21 @@ def filter_geneset(infiles, outfile):
 #--normalize-profile=area
 
 @follows(mkdir("profiles.dir"))
-@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-ChIP-(.+)-(.+).filtered.deduplicated.bam"),
-           add_inputs(r"deduplicated.dir/\1-Input-\2.filtered.deduplicated.bam",filter_geneset),
-           r"profiles.dir/\1-ChIP-\2-\3.bam2geneprofile")
+@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-(.+)-(.+)-(.+).filtered.deduplicated.bam"),
+           add_inputs(filter_geneset),
+           r"profiles.dir/\1-\2-\3-\4.bam2geneprofile")
 def geneprofiles(infiles,outfile):
-    bamfile, controlfile, filtered_geneset = infiles
-    base=re.search(r"(profiles.dir/.+-ChIP-.+-.+).bam2geneprofile", outfile, flags = 0)  
+    bamfile, filtered_geneset = infiles
+    base=re.search(r"(profiles.dir/.+-.+-.+-.+)bam2geneprofile", outfile, flags = 0)  
     base=base.group(1)
     outputallprofiles = PARAMS["job_outputallprofiles"]
+    inputpersample = PARAMS["job_inputpersample"]
     if outputallprofiles == 1:
         outputprofiles = "--output-all-profiles"
     elif outputallprofiles == 0:
         outputprofiles = ""
     statement='''python ~/devel/cgat/CGAT/scripts/bam2geneprofile.py
                  -b %(bamfile)s
-                 -c %(controlfile)s
                  -g %(filtered_geneset)s
                  --reporter=gene
                  -m geneprofile 
@@ -285,52 +285,117 @@ def geneprofiles(infiles,outfile):
     P.run()
 
 
-@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-ChIP-(.+)-(.+).filtered.deduplicated.bam"),
-           add_inputs(r"deduplicated.dir/\1-Input-\2.filtered.deduplicated.bam", filter_geneset),
-           r"profiles.dir/\1-ChIP-\2-\3.bam2tssprofile")
+#removed     samplenumber = re.search(r"(deduplicated.dir/.+)-ChIP-(.+)-(.+).filtered.deduplicated.bam",bamfile,flags = 0)
+#    if inputpersample == 1:
+#        controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"
+#    elif inputpersample == 0:
+#        controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+#removed -c %(controlfile)s - find out what this does
+
+
+@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-(.+)-(.+)-(.+).filtered.deduplicated.bam"),
+           add_inputs(filter_geneset),
+           r"profiles.dir/\1-\2-\3-\4.bam2tssprofile")
 def tssprofiles(infiles,outfile):
-    bamfile, controlfile, filtered_geneset = infiles
-    base=re.search(r"(profiles.dir/.+-ChIP-.+-.+).bam2tssprofile", outfile, flags = 0)  
+    bamfile, filtered_geneset = infiles
+    base=re.search(r"(profiles.dir/.+-.+-.+-.+)bam2tssprofile", outfile, flags = 0)  
     base=base.group(1)
     outputallprofiles = PARAMS["job_outputallprofiles"]
+    inputpersample = PARAMS["job_inputpersample"]
     if outputallprofiles == 1:
         outputprofiles = "--output-all-profiles"
     elif outputallprofiles == 0:
         outputprofiles = ""
     statement='''python ~/devel/cgat/CGAT/scripts/bam2geneprofile.py
                  -b %(bamfile)s
-                 -c %(controlfile)s
                  -g %(filtered_geneset)s
                  --reporter=gene 
                  -m tssprofile
                  %(outputprofiles)s                 
-                 --normalize-transcript=none
-                 --normalize-profile=none
                  --merge-pairs
                  -P %(base)s%%s > 
                  %(outfile)s'''
     job_memory="6G"
     P.run()
 
+#removed     if inputpersample == 1:
+#        controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"
+#    elif inputpersample == 0:
+#        controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+
+#removed -c %(controlfile)s - find out what this does
 
 #    if peakcalling == 1:
 #        peaks = "--broad"
 #    elif peakcalling == 0:
 #        peaks = "" 
+#  add_inputs(r"deduplicated.dir/\1-Input-\2.filtered.deduplicated.bam"),
+
+
+@follows(geneprofiles)
+@merge("profiles.dir/*-*-*-*.bwa.geneprofile.matrix.tsv.gz", "combined_geneprofiles_matrix.txt")
+def mergegeneprofiles(infiles, outfile):
+    infiles = " ".join(infiles)
+    statement = '''python ~/devel/cgat/CGAT/scripts/combine_tables.py
+                   --regex-filename="profiles.dir/(.+)-(.+)-(.+).bwa.geneprofile.matrix.tsv.gz"
+                   --cat pulldown,condition,replicate
+                   -S %(outfile)s
+                   %(infiles)s'''
+    job_memory="10G"
+    P.run()
+
+@follows(tssprofiles)
+@merge("profiles.dir/*-*-*-*.bwa.tssprofile.matrix.tsv.gz", "combined_tssprofiles_matrix.txt")
+def mergetssprofiles(infiles, outfile):
+    infiles = " ".join(infiles)
+    statement = '''python ~/devel/cgat/CGAT/scripts/combine_tables.py
+                   --regex-filename="profiles.dir/(.+)-(.+)-(.+).bwa.tssprofile.matrix.tsv.gz"
+                   --cat pulldown,condition,replicate
+                   -S %(outfile)s
+                   %(infiles)s'''
+    job_memory="10G"
+    P.run()
+
+
+@follows(mergetssprofiles)
+@merge("deduplicated.dir/*.bam", "Filtered_Deduplicated_Read_Counts.tsv")
+def getprocessedreadcounts(infiles, outfile):
+    infiles = " ".join(infiles)
+    statement = '''for i in %(infiles)s; do
+        echo -e $i' \t '$(samtools view -c -F 4 $i) >> Deduplicated_Bam_Read_Numbers.tsv;
+    done'''
+    job_memory="20G"
+    P.run()
+   
 
 @follows(mkdir("broadpeakcalling.dir"))
 @transform(removeduplicates,
 	   regex(r"deduplicated.dir/(.+)-ChIP-(.+)-(.+).filtered.deduplicated.bam"),
-           add_inputs(r"deduplicated.dir/\1-Input-\2.filtered.deduplicated.bam"),
            r"broadpeakcalling.dir/\1-ChIP-\2-\3.bam.macs2")
-def broadpeakcall(infiles,outfile):
-    bamfile, controlfile = infiles
+def broadpeakcall(infile,outfile):
+    bamfile = infile
     peakcalling = PARAMS["job_peakcalling"]
     peakcallingformat = PARAMS["job_peakcallingformat"]
-    if peakcalling == 1:
-        peaks = "--broad"
-    elif peakcalling == 0:
-        peaks = "" 
+    inputpersample = PARAMS["job_inputpersample"]
+    IgG_Input = PARAMS["job_igginput"]
+    IgG_input_prefix = PARAMS["job_mainsampleprefix"]
+    samplenumber = re.search(r"(deduplicated.dir/.+)-ChIP-(.+)-(.+).filtered.deduplicated.bam",bamfile,flags = 0)
+    if inputpersample == 1:
+        if re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) != "IgG":
+            controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"
+        elif re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) == "IgG":
+            if IgG_Input == 1:
+                controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"
+            elif IgG_Input == 0:
+                controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"                
+    elif inputpersample == 0:
+        if re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) != "IgG":
+            controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+        elif re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) == "IgG":
+            if IgG_Input == 1:
+                controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+            elif IgG_Input == 0:
+                controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
     drctry=re.search(r"(broadpeakcalling.dir/.+-ChIP-.+-.+).bam.macs2", outfile, flags = 0)
     drc=drctry.group(1)
     statement='''macs2 callpeak -t %(bamfile)s 
@@ -345,15 +410,35 @@ def broadpeakcall(infiles,outfile):
     job_memory="6G"
     P.run()
 
+
 @follows(mkdir("narrowpeakcalling.dir"))
 @transform(removeduplicates,
 	   regex(r"deduplicated.dir/(.+)-ChIP-(.+)-(.+).filtered.deduplicated.bam"),
-           add_inputs(r"deduplicated.dir/\1-Input-\2.filtered.deduplicated.bam"),
            r"narrowpeakcalling.dir/\1-ChIP-\2-\3.bam.macs2")
-def narrowpeakcall(infiles,outfile):
-    bamfile, controlfile = infiles
+def narrowpeakcall(infile,outfile):
+    bamfile  = infile
     peakcalling = PARAMS["job_peakcalling"]
     peakcallingformat = PARAMS["job_peakcallingformat"]
+    IgG_Input = PARAMS["job_igginput"]
+    IgG_input_prefix = PARAMS["job_mainsampleprefix"]
+    inputpersample = PARAMS["job_inputpersample"]
+    samplenumber = re.search(r"(deduplicated.dir/.+)-ChIP-(.+)-(.+).filtered.deduplicated.bam",bamfile,flags = 0)
+    if inputpersample == 1:
+        if re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) != "IgG":
+            controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"
+        elif re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) == "IgG":
+            if IgG_Input == 1:
+                controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"
+            elif IgG_Input == 0:
+                controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"
+    elif inputpersample == 0:
+        if re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) != "IgG":
+            controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+        elif re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) == "IgG":
+            if IgG_Input == 1:
+                controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+            elif IgG_Input == 0:
+                controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
     drctry=re.search(r"(narrowpeakcalling.dir/.+-ChIP-.+-.+).bam.macs2", outfile, flags = 0)
     drc=drctry.group(1)
     statement='''macs2 callpeak -t %(bamfile)s 
@@ -406,7 +491,7 @@ def foldchangebw(infiles, outfile):
 
 # ---------------------------------------------------
 # Generic pipeline tasks
-@follows(broadpeakcall, foldchangebw, geneprofiles, tssprofiles, mergegenecounts)
+@follows(broadpeakcall, getprocessedreadcounts, foldchangebw, mergegeneprofiles, mergetssprofiles, mergegenecounts)
 def full():
     pass
 
