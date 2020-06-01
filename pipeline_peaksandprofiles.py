@@ -164,13 +164,13 @@ def removeduplicates(infile, outfile):
     #P.run()
 
 @follows("removeduplicates")
-@transform(PARAMS['job_annotations'],suffix(".gtf.gz"),"_merged.gtf")
+@transform(PARAMS['job_annotations'],regex(r".*.gtf.gz"),"geneset_merged.gtf")
 def mergeexons(infile, outfile):
     gtfmethod=PARAMS['job_gtf2gtfmergemethod']
     statement='''zcat %(infile)s | 
-                 python %(cgat_scripts_dir)s/gtf2gtf.py
+                 python ~/devel/cgat/CGAT/scripts/gtf2gtf.py
                  --method=%(gtfmethod)s |
-                 python %(cgat_scripts_dir)s/gtf2gtf.py
+                 python ~/devel/cgat/CGAT/scripts/gtf2gtf.py
                  --method=set-transcript-to-gene >
                  %(outfile)s'''
     
@@ -215,8 +215,8 @@ def get_contigs(infile, outfile):
     outlines = []
     for entry in GTF.iterator(IOTools.openFile(infile)):
    
-        if last_contig and entry.contig != last_contig:
-            outlines.append([entry.contig, str(max_end)])
+        if last_contig != None and entry.contig != last_contig:
+            outlines.append([last_contig, str(max_end)])
             max_end = 0
             
         max_end = max(max_end, entry.end)
@@ -230,13 +230,28 @@ def get_contigs(infile, outfile):
 #           add_inputs(get_contigs),
 #           r"\1.filtered.gtf.gz")
 
+#    last_contig = None
+#    max_end = 0
+#    outlines = []
+#    for entry in GTF.iterator(IOTools.openFile(infile)):
+#
+#        if last_contig and entry.contig != last_contig:
+#            outlines.append([entry.contig, str(max_end)])
+#            max_end = 0
+#
+#        max_end = max(max_end, entry.end)
+#        last_contig = entry.contig
+#
+#    outlines.append([last_contig, str(max_end)])
+#    IOTools.writeLines(outfile, outlines, header=None)
+
 @transform(PARAMS["job_annotations"],
            formatter(),
            add_inputs(get_contigs),
            "geneset.filtered.gtf.gz")
 def filter_geneset(infiles, outfile):
     geneset, genome_file = infiles
-    filter_extension_up=["job_extension_up"]
+    filter_extension_up=PARAMS["job_extension_up"]
     filter_extension_down=PARAMS["job_extension_down"]
 
 
