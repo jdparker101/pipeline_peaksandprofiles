@@ -405,12 +405,12 @@ def broadpeakcall(infile,outfile):
                 controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"                
     elif inputpersample == 0:
         if re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) != "IgG":
-            controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+            controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".bwa.filtered.deduplicated.bam"
         elif re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) == "IgG":
             if IgG_Input == 1:
-                controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+                controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".bwa.filtered.deduplicated.bam"
             elif IgG_Input == 0:
-                controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+                controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + ".bwa.filtered.deduplicated.bam"
     drctry=re.search(r"(broadpeakcalling.dir/.+-ChIP-.+-.+).bam.macs2", outfile, flags = 0)
     drc=drctry.group(1)
     statement='''macs2 callpeak -t %(bamfile)s 
@@ -448,12 +448,12 @@ def narrowpeakcall(infile,outfile):
                 controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + "-" + samplenumber.group(3) + ".filtered.deduplicated.bam"
     elif inputpersample == 0:
         if re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) != "IgG":
-            controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+            controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".bwa.filtered.deduplicated.bam"
         elif re.search(r"deduplicated.dir/(.+)-ChIP-.+-.+.filtered.deduplicated.bam",bamfile,flags = 0).group(1) == "IgG":
             if IgG_Input == 1:
-                controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+                controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".bwa.filtered.deduplicated.bam"
             elif IgG_Input == 0:
-                controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
+                controlfile = "deduplicated.dir/" + IgG_input_prefix + "-Input-" + samplenumber.group(2) + ".bwa.filtered.deduplicated.bam"
     drctry=re.search(r"(narrowpeakcalling.dir/.+-ChIP-.+-.+).bam.macs2", outfile, flags = 0)
     drc=drctry.group(1)
     statement='''macs2 callpeak -t %(bamfile)s 
