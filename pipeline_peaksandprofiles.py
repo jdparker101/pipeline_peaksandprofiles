@@ -271,13 +271,18 @@ def filter_geneset(infiles, outfile):
 #--normalize-transcript=total-sum
 #--normalize-profile=area
 
+#@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-(.+)-(.+)-(.+).filtered.deduplicated.bam"),
+#           add_inputs(filter_geneset),
+#           r"profiles.dir/\1-\2-\3-\4.bam2geneprofile")
+
+
 @follows(mkdir("profiles.dir"))
-@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-(.+)-(.+)-(.+).filtered.deduplicated.bam"),
+@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-(.+)-(.+).filtered.deduplicated.bam"),
            add_inputs(filter_geneset),
-           r"profiles.dir/\1-\2-\3-\4.bam2geneprofile")
+           r"profiles.dir/\1-\2-\3.bam2geneprofile")
 def geneprofiles(infiles,outfile):
     bamfile, filtered_geneset = infiles
-    base=re.search(r"(profiles.dir/.+-.+-.+-.+)bam2geneprofile", outfile, flags = 0)  
+    base=re.search(r"(profiles.dir/.+-.+-.+)bam2geneprofile", outfile, flags = 0)  
     base=base.group(1)
     outputallprofiles = PARAMS["job_outputallprofiles"]
     inputpersample = PARAMS["job_inputpersample"]
@@ -307,13 +312,15 @@ def geneprofiles(infiles,outfile):
 #        controlfile = samplenumber.group(1) + "-Input-" + samplenumber.group(2) + ".filtered.deduplicated.bam"
 #removed -c %(controlfile)s - find out what this does
 
+#@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-(.+)-(.+)-(.+).filtered.deduplicated.bam"),
+#           r"profiles.dir/\1-\2-\3.bam2tssprofile")
 
-@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-(.+)-(.+)-(.+).filtered.deduplicated.bam"),
+@transform(removeduplicates,regex(r"deduplicated.dir/(.+)-(.+)-(.+).filtered.deduplicated.bam"),
            add_inputs(filter_geneset),
-           r"profiles.dir/\1-\2-\3-\4.bam2tssprofile")
+           r"profiles.dir/\1-\2-\3.bam2tssprofile")
 def tssprofiles(infiles,outfile):
     bamfile, filtered_geneset = infiles
-    base=re.search(r"(profiles.dir/.+-.+-.+-.+)bam2tssprofile", outfile, flags = 0)  
+    base=re.search(r"(profiles.dir/.+-.+-.+)bam2tssprofile", outfile, flags = 0)  
     base=base.group(1)
     outputallprofiles = PARAMS["job_outputallprofiles"]
     inputpersample = PARAMS["job_inputpersample"]
@@ -346,9 +353,10 @@ def tssprofiles(infiles,outfile):
 #        peaks = "" 
 #  add_inputs(r"deduplicated.dir/\1-Input-\2.filtered.deduplicated.bam"),
 
+#@merge("profiles.dir/*-*-*.bwa.geneprofile.matrix.tsv.gz", "combined_geneprofiles_matrix.txt")
 
 @follows(geneprofiles)
-@merge("profiles.dir/*-*-*-*.bwa.geneprofile.matrix.tsv.gz", "combined_geneprofiles_matrix.txt")
+@merge("profiles.dir/*-*-*.bwa.geneprofile.matrix.tsv.gz", "combined_geneprofiles_matrix.txt")
 def mergegeneprofiles(infiles, outfile):
     infiles = " ".join(infiles)
     statement = '''python ~/devel/cgat/CGAT/scripts/combine_tables.py
@@ -359,8 +367,10 @@ def mergegeneprofiles(infiles, outfile):
     job_memory="10G"
     P.run()
 
+#@merge("profiles.dir/*-*-*-*.bwa.tssprofile.matrix.tsv.gz", "combined_tssprofiles_matrix.txt")
+
 @follows(tssprofiles)
-@merge("profiles.dir/*-*-*-*.bwa.tssprofile.matrix.tsv.gz", "combined_tssprofiles_matrix.txt")
+@merge("profiles.dir/*-*-*.bwa.tssprofile.matrix.tsv.gz", "combined_tssprofiles_matrix.txt")
 def mergetssprofiles(infiles, outfile):
     infiles = " ".join(infiles)
     statement = '''python ~/devel/cgat/CGAT/scripts/combine_tables.py
